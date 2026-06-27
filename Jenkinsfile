@@ -2,28 +2,27 @@ pipeline {
     agent any
 
     environment {
-        // Docker Hub image name -> wojtek0/flask-cicd-app
+        // Docker Hub image -> wojtek0/flask-cicd-app
         DOCKERHUB_USER  = 'wojtek0'
         IMAGE_NAME      = "wojtek0/flask-cicd-app"
         IMAGE_TAG       = "${env.BUILD_NUMBER}"
-        // ID of the 'Username with password' credential you add in Jenkins
+        // 'Username with password' credential ID stored in Jenkins
         DOCKERHUB_CREDS = 'dockerhub-creds'
     }
 
     stages {
         stage('Checkout') {
             steps {
-                // Pulls the code from GitHub (configured in the job / via webhook)
                 checkout scm
             }
         }
 
         stage('Build / Install deps') {
             steps {
-                sh '''
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install --upgrade pip
+                bat '''
+                    python -m venv venv
+                    call venv\\Scripts\\activate.bat
+                    python -m pip install --upgrade pip
                     pip install -r requirements.txt
                 '''
             }
@@ -31,8 +30,8 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh '''
-                    . venv/bin/activate
+                bat '''
+                    call venv\\Scripts\\activate.bat
                     pytest -v --junitxml=report.xml
                 '''
             }
@@ -45,7 +44,7 @@ pipeline {
 
         stage('Build Docker image') {
             steps {
-                sh "docker build -t ${IMAGE_NAME}:${IMAGE_TAG} -t ${IMAGE_NAME}:latest ."
+                bat "docker build -t %IMAGE_NAME%:%IMAGE_TAG% -t %IMAGE_NAME%:latest ."
             }
         }
 
@@ -55,10 +54,10 @@ pipeline {
                         credentialsId: "${DOCKERHUB_CREDS}",
                         usernameVariable: 'DH_USER',
                         passwordVariable: 'DH_PASS')]) {
-                    sh '''
-                        echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
-                        docker push ''' + "${IMAGE_NAME}:${IMAGE_TAG}" + '''
-                        docker push ''' + "${IMAGE_NAME}:latest" + '''
+                    bat '''
+                        echo %DH_PASS% | docker login -u %DH_USER% --password-stdin
+                        docker push %IMAGE_NAME%:%IMAGE_TAG%
+                        docker push %IMAGE_NAME%:latest
                         docker logout
                     '''
                 }
@@ -74,7 +73,7 @@ pipeline {
             echo 'Pipeline failed - check the stage logs above.'
         }
         always {
-            sh 'docker image prune -f || true'
+            bat(script: 'docker image prune -f', returnStatus: true)
         }
     }
 }
